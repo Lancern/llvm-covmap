@@ -2,6 +2,8 @@
 // Created by Sirui Mu on 2021/1/3.
 //
 
+#include <cassert>
+
 #include <llvm/Pass.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Instructions.h>
@@ -71,6 +73,8 @@ public:
 
       ++functionId;
     }
+
+    assert(functionId == numFunctions && "Wrong number of functions");
 
     return true;
   }
