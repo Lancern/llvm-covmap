@@ -80,6 +80,8 @@ public:
   }
 };
 
+char CoverageMapPass::ID = 0;
+
 __attribute__((unused))
 static llvm::RegisterPass<CoverageMapPass> RegisterCoverageMapPass { // NOLINT(cert-err58-cpp)
   "covmap",
