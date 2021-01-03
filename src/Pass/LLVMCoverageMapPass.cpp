@@ -33,7 +33,13 @@ public:
   bool runOnModule(llvm::Module &module) final {
     llvm::outs() << "========== LLVM Coverage Map Instrumentation Pass ==========\n";
 
-    uint64_t numFunctions = module.getFunctionList().size();
+    uint64_t numFunctions = 0;
+    for (const auto &function : module) {
+      if (!function.isDeclaration()) {
+        ++numFunctions;
+      }
+    }
+
     llvm::outs() << "Number of functions found: " << numFunctions << "\n";
 
     if (numFunctions == 0) {
@@ -50,6 +56,10 @@ public:
 
     uint64_t functionId = 0;
     for (auto &function : module) {
+      if (function.isDeclaration()) {
+        continue;
+      }
+
       auto &entryBlock = function.getEntryBlock();
 
       auto functionIdConstantValue = llvm::ConstantInt::get(
