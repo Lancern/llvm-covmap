@@ -11,6 +11,9 @@ message(STATUS "Using LLVMConfig.cmake in ${LLVM_DIR}")
 set(LLVM_COVMAP_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/include")
 include_directories("${LLVM_COVMAP_INCLUDE_DIR}")
 
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+
 function(target_link_llvm name)
     target_include_directories("${name}"
             PUBLIC ${LLVM_INCLUDE_DIRS})
