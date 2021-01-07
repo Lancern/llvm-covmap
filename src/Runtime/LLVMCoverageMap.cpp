@@ -59,6 +59,7 @@ static void UnmountBitmap() noexcept {
 static void MountBitmap(uint64_t bitmapSize) noexcept {
   auto sharedMemoryName = getenv("LLVM_COVMAP_SHM_NAME");
   if (!sharedMemoryName) {
+    disabled = true;
     return;
   }
 
