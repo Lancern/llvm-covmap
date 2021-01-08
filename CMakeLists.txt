@@ -22,4 +22,5 @@ function(target_link_llvm name)
             PUBLIC ${LLVM_DEFINITIONS})
 endfunction()
 
+add_subdirectory(third_party)
 add_subdirectory(src)
