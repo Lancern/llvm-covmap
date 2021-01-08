@@ -17,6 +17,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+constexpr static const size_t DefaultSharedMemorySize = 1024 * 1024;  // 1 MiB
+
 #define SET_BITMAP(map, offset) \
   map[(offset) >> 3] |= (1u << ((offset) & 7))
 
@@ -30,33 +32,42 @@ extern "C" {
 
 __attribute__((noreturn))
 static void FatalError(const char *function, int errorCode) {
-  fprintf(stderr, "%s failed: %d: %s", function, errorCode, strerror(errorCode));
+  fprintf(stderr, "llvm-covmap: %s failed: %d: %s", function, errorCode, strerror(errorCode));
   abort();
 }
 
-static uint64_t GetSharedMemorySize(uint64_t bitmapSize) noexcept {
-  return (bitmapSize >> 3) + static_cast<uint64_t>((bitmapSize & 7) != 0) + sizeof(uint64_t);
+static size_t GetSharedMemorySize() noexcept {
+  auto sharedMemorySizeStr = getenv("LLVM_COVMAP_SHM_SIZE");
+  if (!sharedMemorySizeStr) {
+    return DefaultSharedMemorySize;
+  }
+
+  errno = 0;
+  size_t sharedMemorySize = std::strtoull(sharedMemorySizeStr, nullptr, 10);
+  if (errno != 0) {
+    return DefaultSharedMemorySize;
+  }
+
+  return sharedMemorySize;
 }
 
 static void UnmountBitmap() noexcept {
+  if (disabled || !__llvm_covmap) {
+    return;
+  }
+
   auto sharedMemoryName = getenv("LLVM_COVMAP_SHM_NAME");
   if (!sharedMemoryName) {
     return;
   }
 
-  if (!__llvm_covmap) {
-    return;
-  }
-
-  uint8_t *sharedMemory = __llvm_covmap - sizeof(uint64_t);
-  auto sharedMemorySize = GetSharedMemorySize(*reinterpret_cast<uint64_t *>(sharedMemory));
-
-  munmap(sharedMemory, sharedMemorySize);
+  auto sharedMemorySize = GetSharedMemorySize();
+  munmap(__llvm_covmap, sharedMemorySize);
   close(sharedMemoryFd);
   shm_unlink(sharedMemoryName);
 }
 
-static void MountBitmap(uint64_t bitmapSize) noexcept {
+static void MountBitmap() noexcept {
   auto sharedMemoryName = getenv("LLVM_COVMAP_SHM_NAME");
   if (!sharedMemoryName) {
     disabled = true;
@@ -68,7 +79,7 @@ static void MountBitmap(uint64_t bitmapSize) noexcept {
     FatalError("shm_open", errno);
   }
 
-  auto sharedMemorySize = GetSharedMemorySize(bitmapSize);
+  auto sharedMemorySize = GetSharedMemorySize();
   if (ftruncate64(sharedMemoryFd, sharedMemorySize) == -1) {
     auto errorCode = errno;
     close(sharedMemoryFd);
@@ -84,15 +95,14 @@ static void MountBitmap(uint64_t bitmapSize) noexcept {
     FatalError("mmap", errorCode);
   }
 
-  *reinterpret_cast<uint64_t *>(sharedMemory) = bitmapSize;
-  __llvm_covmap = reinterpret_cast<uint8_t *>(sharedMemory) + sizeof(uint64_t);
+  __llvm_covmap = reinterpret_cast<uint8_t *>(sharedMemory);
 
   atexit(UnmountBitmap);
 }
 
 extern "C" {
 
-  void __llvm_covmap_hit_function(uint64_t numFunctions, uint64_t functionId) {
+  void __llvm_covmap_hit_function(uint64_t functionId) {
     if (disabled) {
       return;
     }
@@ -105,7 +115,7 @@ extern "C" {
       }
 
       if (!__llvm_covmap) {
-        MountBitmap(numFunctions);
+        MountBitmap();
         if (!__llvm_covmap) {
           disabled = true;
         }

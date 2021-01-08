@@ -2,13 +2,17 @@
 // Created by Sirui Mu on 2021/1/3.
 //
 
-#include <cassert>
+#include <cerrno>
+#include <chrono>
+#include <cstdint>
+#include <cstdlib>
+#include <random>
 
 #include <llvm/Pass.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Instructions.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
-#include <llvm/Support/Casting.h>
 #include <llvm/Support/raw_ostream.h>
 
 namespace llvm {
@@ -17,11 +21,28 @@ namespace covmap {
 
 constexpr static const char *CoverageFunctionName = "__llvm_covmap_hit_function";
 
+constexpr static const uint32_t DefaultInstrumentationRatio = 100;
+
 static llvm::FunctionType *GetCoverageFunctionType(llvm::LLVMContext &context) noexcept {
   auto uint64Type = llvm::IntegerType::get(context, 64);
-  llvm::Type *argTypes[2] = { uint64Type, uint64Type };
+  llvm::Type *argTypes[1] = { uint64Type };
   auto voidType = llvm::Type::getVoidTy(context);
   return llvm::FunctionType::get(voidType, argTypes, false);
+}
+
+static unsigned GetInstrumentationRatio() noexcept {
+  auto ratioStr = getenv("LLVM_COVMAP_INST_RATIO");
+  if (!ratioStr) {
+    return DefaultInstrumentationRatio;
+  }
+
+  errno = 0;
+  uint32_t ratio = std::strtoul(ratioStr, nullptr, 10);
+  if (errno != 0) {
+    return DefaultInstrumentationRatio;
+  }
+
+  return ratio;
 }
 
 class CoverageMapPass : public llvm::ModulePass {
@@ -29,54 +50,51 @@ public:
   static char ID;
 
   explicit CoverageMapPass() noexcept
-    : llvm::ModulePass { ID }
+    : llvm::ModulePass { ID },
+      _rnd(std::chrono::high_resolution_clock::now().time_since_epoch().count())
   { }
 
   bool runOnModule(llvm::Module &module) final {
-    llvm::outs() << "========== LLVM Coverage Map Instrumentation Pass ==========\n";
+    auto coverageFunctionType = GetCoverageFunctionType(module.getContext());
+    auto coverageFunctionCallee = module.getOrInsertFunction(CoverageFunctionName, coverageFunctionType);
 
-    uint64_t numFunctions = 0;
-    for (const auto &function : module) {
-      if (!function.isDeclaration()) {
-        ++numFunctions;
-      }
-    }
+    auto ratio = GetInstrumentationRatio();
 
-    llvm::outs() << "Number of functions found: " << numFunctions << "\n";
-
-    if (numFunctions == 0) {
-      return false;
-    }
-
-    auto numFunctionsConstantValue = llvm::ConstantInt::get(
-        llvm::IntegerType::get(module.getContext(), 64),
-        numFunctions);
-
-    auto coverageFunctionCallee = module.getOrInsertFunction(
-        CoverageFunctionName,
-        GetCoverageFunctionType(module.getContext()));
-
-    uint64_t functionId = 0;
     for (auto &function : module) {
       if (function.isDeclaration()) {
         continue;
       }
 
+      if (!Probability(ratio)) {
+        continue;
+      }
+
+      auto functionId = Random();
       auto &entryBlock = function.getEntryBlock();
+      IRBuilder<> builder { &entryBlock, entryBlock.begin() };
 
-      auto functionIdConstantValue = llvm::ConstantInt::get(
-          llvm::IntegerType::get(module.getContext(), 64),
-          functionId);
-      llvm::Value *callArgs[2] = { numFunctionsConstantValue, functionIdConstantValue };
-      llvm::CallInst::Create(coverageFunctionCallee, callArgs)
-          ->insertBefore(&*entryBlock.getFirstInsertionPt());
-
-      ++functionId;
+      llvm::Value *callArgs[1] = { builder.getInt64(functionId) };
+      builder.CreateCall(coverageFunctionCallee, callArgs);
     }
 
-    assert(functionId == numFunctions && "Wrong number of functions");
-
     return true;
+  }
+
+private:
+  std::mt19937_64 _rnd;
+
+  template <typename T>
+  T Random(T min, T max) noexcept {
+    std::uniform_int_distribution<T> dist { min, max };
+    return dist(_rnd);
+  }
+
+  uint64_t Random() noexcept {
+    return _rnd();
+  }
+
+  bool Probability(uint32_t ratio) noexcept {
+    return Random<uint32_t>(0, 100) > ratio;
   }
 };
 
