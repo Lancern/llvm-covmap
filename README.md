@@ -3,8 +3,8 @@
 ![Build Passing](https://img.shields.io/badge/build-passing-brightgree)
 ![LLVM 10.0.0](https://img.shields.io/badge/llvm-10.0.0-blue)
 
-LLVM pass that instruments code to profile for code coverage via bitmap during
-program runtime.
+LLVM passes and utilities that instruments code to profile for **function-level** 
+code coverage via bitmap during program runtime.
 
 ## Build
 
@@ -54,12 +54,42 @@ The output files are generated in the `lib/` directory in the build tree.
 
 ## Usage
 
+> For advanced usage of `llvm-covmap`, please refer to the [wiki page](https://github.com/Lancern/llvm-covmap/wiki).
 
+To simplify examples, we assume that the `LLVM_COVMAP_BUILD_DIR` environment is set
+to the root of the build tree.
+
+Instrument LLVM modules by hand:
+
+```shell
+opt -load $LLVM_COVMAP_BUILD_DIR/lib/libLLVMCoverageMapPass.so -covmap \
+  -o=instrumented-module.bc \
+  input-module.bc
+```
+
+End-to-end build using the drop-in replacement of `clang` and `clang++`:
+
+```shell
+# Compile only, do not link
+$LLVM_COVMAP_BUILD_DIR/bin/llvm-covmap-clang -c -o example.o example.c
+
+# End-to-end compile is supported
+# All necessary runtime libraries required by llvm-covmap will be linked automatically
+$LLVM_COVMAP_BUILD_DIR/bin/llvm-covmap-clang -o example example.c
+$LLVM_COVMAP_BUILD_DIR/bin/llvm-covmap-clang++ -o example example.cpp
+```
+
+One-shot run an **instrumented** program and dump the coverage information:
+
+```shell
+$LLVM_COVMAP_BUILD_DIR/bin/llvm-covmap-shell ls
+```
 
 ## Contribute
 
-This project is open for any feature requests and pull requests. Feel free to open
-a feature request via the issues zone.
+This project is built for private use so we don't accept any feature requests or
+pull requests. But you're free to fork your own copy of this project and add
+modifications to fit your need.
 
 ## License
 
