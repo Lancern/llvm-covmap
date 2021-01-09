@@ -12,8 +12,10 @@
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/raw_ostream.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
 namespace llvm {
 
@@ -100,12 +102,28 @@ private:
 
 char CoverageMapPass::ID = 0;
 
+static void RegisterCoverageMapPass(const llvm::PassManagerBuilder &, llvm::legacy::PassManagerBase &manager) noexcept {
+  manager.add(new CoverageMapPass());
+}
+
 __attribute__((unused))
-static llvm::RegisterPass<CoverageMapPass> RegisterCoverageMapPass { // NOLINT(cert-err58-cpp)
+static llvm::RegisterPass<CoverageMapPass> RegisterCoverageMapLoadablePass { // NOLINT(cert-err58-cpp)
   "covmap",
   "Collect coverage bitmap",
   false,
   false
+};
+
+__attribute__((unused))
+static llvm::RegisterStandardPasses RegisterCoverageMapStandardPass { // NOLINT(cert-err58-cpp)
+    llvm::PassManagerBuilder::EP_ModuleOptimizerEarly,
+    RegisterCoverageMapPass
+};
+
+__attribute__((unused))
+static llvm::RegisterStandardPasses RegisterCoverageMapStandardPassOpt0 { // NOLINT(cert-err58-cpp)
+  llvm::PassManagerBuilder::EP_EnabledOnOptLevel0,
+  RegisterCoverageMapPass
 };
 
 } // namespace covmap
