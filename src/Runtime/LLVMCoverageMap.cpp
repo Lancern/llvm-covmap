@@ -5,7 +5,9 @@
 #pragma clang diagnostic push
 #pragma ide diagnostic ignored "bugprone-reserved-identifier"
 
+#include <cassert>
 #include <cerrno>
+#include <climits>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -19,19 +21,18 @@
 
 constexpr static const size_t DefaultSharedMemorySize = 1024 * 1024;  // 1 MiB
 
-#define SET_BITMAP(map, offset) \
-  map[(offset) >> 3] |= (1u << ((offset) & 7))
-
 static bool disabled;
 static int sharedMemoryFd;
 static std::mutex mountMutex;
 
 extern "C" {
   uint8_t *__llvm_covmap;
+  const char *__llvm_covmap_shm_name;
+  size_t __llvm_covmap_size;
 } // extern "C"
 
 __attribute__((noreturn))
-static void FatalError(const char *function, int errorCode) {
+static void FatalError(const char *function, int errorCode) noexcept {
   fprintf(stderr, "llvm-covmap: %s failed: %d: %s", function, errorCode, strerror(errorCode));
   abort();
 }
@@ -48,6 +49,7 @@ static size_t GetSharedMemorySize() noexcept {
     return DefaultSharedMemorySize;
   }
 
+  assert((sharedMemorySize & 7) && "Shared memory size should be a multiple of 8");
   return sharedMemorySize;
 }
 
@@ -56,48 +58,48 @@ static void UnmountBitmap() noexcept {
     return;
   }
 
-  auto sharedMemoryName = getenv("LLVM_COVMAP_SHM_NAME");
-  if (!sharedMemoryName) {
-    return;
-  }
-
-  auto sharedMemorySize = GetSharedMemorySize();
-  munmap(__llvm_covmap, sharedMemorySize);
+  munmap(__llvm_covmap, __llvm_covmap_size);
   close(sharedMemoryFd);
-  shm_unlink(sharedMemoryName);
+  shm_unlink(__llvm_covmap_shm_name);
 }
 
 static void MountBitmap() noexcept {
-  auto sharedMemoryName = getenv("LLVM_COVMAP_SHM_NAME");
-  if (!sharedMemoryName) {
+  __llvm_covmap_shm_name = getenv("LLVM_COVMAP_SHM_NAME");
+  if (!__llvm_covmap_shm_name) {
     disabled = true;
     return;
   }
 
-  sharedMemoryFd = shm_open(sharedMemoryName, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  sharedMemoryFd = shm_open(__llvm_covmap_shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
   if (sharedMemoryFd == -1) {
     FatalError("shm_open", errno);
   }
 
-  auto sharedMemorySize = GetSharedMemorySize();
-  if (ftruncate64(sharedMemoryFd, sharedMemorySize) == -1) {
+  __llvm_covmap_size = GetSharedMemorySize();
+  if (ftruncate64(sharedMemoryFd, __llvm_covmap_size) == -1) {
     auto errorCode = errno;
     close(sharedMemoryFd);
-    shm_unlink(sharedMemoryName);
+    shm_unlink(__llvm_covmap_shm_name);
     FatalError("ftruncate64", errorCode);
   }
 
-  auto sharedMemory = mmap(nullptr, sharedMemorySize, PROT_READ | PROT_WRITE, MAP_SHARED, sharedMemoryFd, 0);
+  auto sharedMemory = mmap(nullptr, __llvm_covmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, sharedMemoryFd, 0);
   if (sharedMemory == MAP_FAILED) {
     auto errorCode = errno;
     close(sharedMemoryFd);
-    shm_unlink(sharedMemoryName);
+    shm_unlink(__llvm_covmap_shm_name);
     FatalError("mmap", errorCode);
   }
 
   __llvm_covmap = reinterpret_cast<uint8_t *>(sharedMemory);
 
   atexit(UnmountBitmap);
+}
+
+__attribute__((always_inline))
+static inline void SetBitmap(uint64_t functionId) noexcept {
+  auto offset = functionId % (__llvm_covmap_size * CHAR_BIT);
+  __llvm_covmap[offset >> 3] |= (1u << (offset & 7));
 }
 
 extern "C" {
@@ -127,7 +129,7 @@ extern "C" {
       }
     }
 
-    SET_BITMAP(__llvm_covmap, functionId);
+    SetBitmap(functionId);
   }
 
 } // extern "C"

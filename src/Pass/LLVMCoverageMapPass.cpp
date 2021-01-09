@@ -94,7 +94,7 @@ private:
   }
 
   bool Probability(uint32_t ratio) noexcept {
-    return Random<uint32_t>(0, 100) > ratio;
+    return Random<uint32_t>(0, 100) <= ratio;
   }
 };
 
