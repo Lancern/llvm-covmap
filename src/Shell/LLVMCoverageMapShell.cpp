@@ -111,7 +111,9 @@ int StartParent(pid_t pid, const std::string &shmemName, size_t shmemSize) noexc
   do {
     auto ret = waitpid(pid, &status, 0);
     if (ret == -1) {
-      FatalError("waitpid", errno);
+      auto errorCode = errno;
+      UnmountSharedMemory(shmemName, shmem, shmemSize);
+      FatalError("waitpid", errorCode);
     }
   } while (!WIFEXITED(status) && !WIFSIGNALED(status));
 
