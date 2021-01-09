@@ -57,6 +57,11 @@ public:
   { }
 
   bool runOnModule(llvm::Module &module) final {
+    if (module.getFunction(CoverageFunctionName)) {
+      // Already instrumented.
+      return false;
+    }
+
     auto coverageFunctionType = GetCoverageFunctionType(module.getContext());
     auto coverageFunctionCallee = module.getOrInsertFunction(CoverageFunctionName, coverageFunctionType);
 

@@ -59,7 +59,19 @@ static void ExecuteClang(const std::vector<std::string> &args) noexcept {
   std::cerr << "llvm-covmap-clang: execvp failed: " << errorCode << ": " << errorMessage << std::endl;
 }
 
+static bool IsCompiling(int argc, char **argv) {
+  for (auto i = 0; i < argc; ++i) {
+    if (strcmp(argv[i], "-c") == 0) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 int main(int argc, char **argv) {
+  auto compiling = IsCompiling(argc, argv);
+
   std::vector<std::string> args;
 
   args.emplace_back(GetClangPath());
@@ -67,14 +79,19 @@ int main(int argc, char **argv) {
   args.emplace_back("-load");
   args.emplace_back("-Xclang");
   args.emplace_back(PassModule);
-  args.emplace_back("-L" LLVM_COVMAP_RUNTIME_LIBRARY_DIR);
+
+  if (!compiling) {
+    args.emplace_back("-L" LLVM_COVMAP_RUNTIME_LIBRARY_DIR);
+  }
 
   for (auto i = 1; i < argc; ++i) {
     args.emplace_back(argv[i]);
   }
 
-  args.emplace_back("-l" LLVM_COVMAP_RUNTIME_LIBRARY_NAME);
-  args.emplace_back("-lrt");
+  if (!compiling) {
+    args.emplace_back("-l" LLVM_COVMAP_RUNTIME_LIBRARY_NAME);
+    args.emplace_back("-lrt");
+  }
 
   ExecuteClang(args);
   return 1;
