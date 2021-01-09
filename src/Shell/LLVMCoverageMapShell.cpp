@@ -28,7 +28,7 @@ struct SharedMemory {
 
 __attribute__((noreturn))
 void FatalError(const char *function, int errorCode) {
-  fprintf(stderr, "%s failed: %d: %s", function, errorCode, strerror(errorCode));
+  fprintf(stderr, "%s failed: %d: %s\n", function, errorCode, strerror(errorCode));
   abort();
 }
 
@@ -58,7 +58,7 @@ int StartChild(const std::vector<std::string> &args, const std::string &shmemNam
 }
 
 SharedMemory MountSharedMemory(const std::string &shmemName, size_t shmemSize) noexcept {
-  auto shmemFd = shm_open(shmemName.data(), O_CREAT | O_RDONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  auto shmemFd = shm_open(shmemName.data(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
   if (shmemFd == -1) {
     FatalError("shm_open", errno);
   }
@@ -85,8 +85,8 @@ void UnmountSharedMemory(const std::string &shmemName, SharedMemory shmem, size_
 }
 
 void DumpCoverageInfo(void *coverageBitmap, size_t shmemSize) noexcept {
-  assert((reinterpret_cast<uintptr_t>(coverageBitmap) & 7) && "coverageBitmap is not properly aligned");
-  assert((shmemSize & 7) && "shmemSize is not a multiple of 8");
+  assert(((reinterpret_cast<uintptr_t>(coverageBitmap) & 7) == 0) && "coverageBitmap is not properly aligned");
+  assert(((shmemSize & 7) == 0) && "shmemSize is not a multiple of 8");
 
   size_t totalBits = shmemSize * CHAR_BIT;
   size_t effectiveBits = 0;
@@ -100,7 +100,7 @@ void DumpCoverageInfo(void *coverageBitmap, size_t shmemSize) noexcept {
   auto ratio = static_cast<double>(effectiveBits) / totalBits;
   std::cout << "Coverage "
       << effectiveBits << " / " << totalBits
-      << " (" << ratio * 100 << ")"
+      << " (" << ratio * 100 << "%)"
       << std::endl;
 }
 

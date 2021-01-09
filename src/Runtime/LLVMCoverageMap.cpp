@@ -33,7 +33,7 @@ extern "C" {
 
 __attribute__((noreturn))
 static void FatalError(const char *function, int errorCode) noexcept {
-  fprintf(stderr, "llvm-covmap: %s failed: %d: %s", function, errorCode, strerror(errorCode));
+  fprintf(stderr, "llvm-covmap: %s failed: %d: %s\n", function, errorCode, strerror(errorCode));
   abort();
 }
 
@@ -49,7 +49,7 @@ static size_t GetSharedMemorySize() noexcept {
     return DefaultSharedMemorySize;
   }
 
-  assert((sharedMemorySize & 7) && "Shared memory size should be a multiple of 8");
+  assert(((sharedMemorySize & 7) == 0) && "Shared memory size should be a multiple of 8");
   return sharedMemorySize;
 }
 
