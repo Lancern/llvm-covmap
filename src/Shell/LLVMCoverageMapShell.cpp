@@ -134,7 +134,10 @@ int StartParent(pid_t pid, const std::string &shmemName, size_t shmemSize) noexc
 } // namespace <anonymous>
 
 int main(int argc, char *argv[]) {
-  cxxopts::Options options { "llvm-covmap-shell", "Execute " };
+  cxxopts::Options options {
+    "llvm-covmap-shell",
+    "Execute llvm-covmap instrumented programs and dump coverage information"
+  };
   options.add_options()
       ("h,help", "Dump help message")
       ("p,name", "The name of the shared bitmap memory",
