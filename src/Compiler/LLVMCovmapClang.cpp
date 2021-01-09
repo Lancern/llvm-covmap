@@ -2,7 +2,6 @@
 // Created by Sirui Mu on 2021/1/9.
 //
 
-#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -10,6 +9,8 @@
 #include <vector>
 
 #include <unistd.h>
+
+#include "Configure.h"
 
 #ifdef LLVM_COVMAP_CLANG_PLUSPLUS
 constexpr static const char *ClangName = "clang++";
@@ -24,6 +25,12 @@ constexpr static const char *SourceFileExtensions[4] = {
     "cxx",
 };
 
+constexpr static const char *PassModule = LLVM_COVMAP_BINARY_DIR "/lib/libLLVMCoverageMapPass.so";
+
+#define LLVM_COVMAP_RUNTIME_LIBRARY_DIR \
+  LLVM_COVMAP_BINARY_DIR "/lib"
+#define LLVM_COVMAP_RUNTIME_LIBRARY_NAME "LLVMCovmap"
+
 static const char* GetClangPath() noexcept {
   auto clangPath = getenv("LLVM_COVMAP_CLANG");
   if (clangPath) {
@@ -33,62 +40,48 @@ static const char* GetClangPath() noexcept {
   return ClangName;
 }
 
-static bool IsSourceFileName(const char *arg) noexcept {
-  auto extStart = strrchr(arg, '.');
-  if (!extStart) {
-    return false;
-  }
-
-  ++extStart;
-  return std::any_of(
-      std::begin(SourceFileExtensions), std::end(SourceFileExtensions),
-      [extStart] (const char *ext) noexcept -> bool {
-        return strcmp(ext, extStart) == 0;
-      });
-}
-
-static bool IsLinking(int argc, char **argv) noexcept {
-  auto sourceFileCount = 0;
-  for (auto i = 1; i < argc; ++i) {
-    if (IsSourceFileName(argv[i])) {
-      ++sourceFileCount;
+static void ExecuteClang(const std::vector<std::string> &args) noexcept {
+  if (getenv("LLVM_COVMAP_CLANG_DEBUG")) {
+    std::cerr << "llvm-covmap-clang: debug: executing clang with args: [" << std::endl;
+    for (const auto &e : args) {
+      std::cerr << "    \"" << e << "\"," << std::endl;
     }
+    std::cerr << "]" << std::endl;
   }
 
-  return sourceFileCount != 1;
-}
+  std::vector<const char *> nativeArgs;
+  nativeArgs.reserve(args.size() + 1);
 
-static void ExecuteClang(int argc, char **argv, const std::vector<std::string> &additionalArgs) noexcept {
-  std::vector<const char *> args;
-  args.reserve(argc + additionalArgs.size() + 1);
-
-  args.push_back(GetClangPath());
-  for (auto i = 1; i < argc; ++i) {
-    args.push_back(argv[i]);
+  for (const auto &e : args) {
+    nativeArgs.push_back(e.data());
   }
-
-  for (const auto &aa : additionalArgs) {
-    args.push_back(aa.data());
-  }
-
-  args.push_back(nullptr);
+  nativeArgs.push_back(nullptr);
 
   // According to POSIX standards, exec series of functions change neither the pointer arrays nor the strings referenced
   // by the pointer arrays. So the const_cast in the following code should be safe.
-  execvp(args[0], const_cast<char *const *>(args.data()));
+  execvp(nativeArgs[0], const_cast<char *const *>(nativeArgs.data()));
 
   auto errorCode = errno;
   auto errorMessage = strerror(errorCode);
-  std::cerr << argv[0] << ": execvp failed: " << errorCode << ": " << errorMessage << std::endl;
+  std::cerr << "llvm-covmap-clang: execvp failed: " << errorCode << ": " << errorMessage << std::endl;
 }
 
 int main(int argc, char **argv) {
-  std::vector<std::string> additionalArgs;
-  if (IsLinking(argc, argv)) {
-    additionalArgs.reserve(2);
-    
+  std::vector<std::string> args;
+
+  args.emplace_back(GetClangPath());
+  args.emplace_back("-Xclang");
+  args.emplace_back("-load");
+  args.emplace_back("-Xclang");
+  args.emplace_back(PassModule);
+  args.emplace_back("-L" LLVM_COVMAP_RUNTIME_LIBRARY_DIR);
+
+  for (auto i = 1; i < argc; ++i) {
+    args.emplace_back(argv[i]);
   }
 
-  ExecuteClang(argc, argv, additionalArgs);
+  args.emplace_back("-l" LLVM_COVMAP_RUNTIME_LIBRARY_NAME);
+
+  ExecuteClang(args);
   return 1;
 }
