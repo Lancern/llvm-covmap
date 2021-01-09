@@ -18,13 +18,6 @@ constexpr static const char *ClangName = "clang++";
 constexpr static const char *ClangName = "clang";
 #endif
 
-constexpr static const char *SourceFileExtensions[4] = {
-    "c",
-    "cc",
-    "cpp",
-    "cxx",
-};
-
 constexpr static const char *PassModule = LLVM_COVMAP_BINARY_DIR "/lib/libLLVMCoverageMapPass.so";
 
 #define LLVM_COVMAP_RUNTIME_LIBRARY_DIR \
@@ -81,6 +74,7 @@ int main(int argc, char **argv) {
   }
 
   args.emplace_back("-l" LLVM_COVMAP_RUNTIME_LIBRARY_NAME);
+  args.emplace_back("-lrt");
 
   ExecuteClang(args);
   return 1;
