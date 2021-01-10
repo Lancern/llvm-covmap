@@ -16,6 +16,7 @@ static inline std::string LookupUtilityPath(const char *utilityName, const char 
   auto path = getenv("LLVM_COVMAP_CLANG_BASE_DIR");
   if (path) {
     std::string p(path);
+    p.append("/");
     p.append(utilityName);
     return p;
   }
@@ -54,7 +55,7 @@ static inline void ExecuteUtility(
 
   auto errorCode = errno;
   auto errorMessage = strerror(errorCode);
-  std::cerr << utilityName << ": execvp failed: " << errorCode << ": " << errorMessage << std::endl;
+  std::cerr << wrapperName << ": execvp failed: " << errorCode << ": " << errorMessage << std::endl;
 }
 
 #endif // LLVM_COVMAP_SRC_COMPILER_UTILS_HPP
