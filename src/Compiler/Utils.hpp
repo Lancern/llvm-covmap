@@ -6,6 +6,7 @@
 #define LLVM_COVMAP_SRC_COMPILER_UTILS_HPP
 
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
