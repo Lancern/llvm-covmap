@@ -51,13 +51,15 @@ static size_t GetSharedMemorySize() {
   return sharedMemorySize;
 }
 
-static void UnmountBitmap() {
+static void UnlinkSharedMemory() {
   if (disabled || !__llvm_covmap) {
     return;
   }
 
-  munmap(__llvm_covmap, __llvm_covmap_size);
-  close(sharedMemoryFd);
+  // Let the kernel to unmap the shared memory pages and close the shared memory file descriptor when the process
+  // invokes the _exit system call. Otherwise, other atexit handlers might trigger segmentation faults when accessing
+  // the bitmap.
+
   shm_unlink(__llvm_covmap_shm_name);
 }
 
@@ -91,7 +93,7 @@ static void MountBitmap() {
 
   __llvm_covmap = (uint8_t *)sharedMemory;
 
-  atexit(UnmountBitmap);
+  atexit(UnlinkSharedMemory);
 }
 
 __attribute__((always_inline))
