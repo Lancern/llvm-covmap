@@ -28,3 +28,6 @@ endfunction()
 
 add_subdirectory(third_party)
 add_subdirectory(src)
+
+add_custom_target(BuildUtilityLinks ALL "${CMAKE_CURRENT_SOURCE_DIR}/scripts/SetupLinks.sh"
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
