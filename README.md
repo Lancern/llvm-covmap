@@ -54,7 +54,7 @@ The output files are generated in the `lib/` directory in the build tree.
 
 ## Usage
 
-> For advanced usage of `llvm-covmap`, please refer to the [wiki page](https://github.com/Lancern/llvm-covmap/wiki).
+> For advanced usage of `llvm-covmap`, please refer to [docs](./docs).
 
 To simplify examples, we assume that the `LLVM_COVMAP_BUILD_DIR` environment is set
 to the root of the build tree.
