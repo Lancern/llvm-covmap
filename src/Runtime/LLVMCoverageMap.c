@@ -21,16 +21,17 @@
 
 #define DEFAULT_SHARED_MEMORY_SIZE (1024 * 1024)
 
-static int disabled;
-static int sharedMemoryFd;
 static pthread_mutex_t mountMutex = PTHREAD_MUTEX_INITIALIZER;
 
-uint8_t *__llvm_covmap;
 const char *__llvm_covmap_shm_name;
+int __llvm_covmap_disabled;
+int __llvm_covmap_fd;
+uint8_t *__llvm_covmap;
 size_t __llvm_covmap_size;
 
 __attribute__((noreturn))
 static void FatalError(const char *function, int errorCode) {
+  __llvm_covmap_disabled = 1;
   fprintf(stderr, "llvm-covmap: %s failed: %d: %s\n", function, errorCode, strerror(errorCode));
   abort();
 }
@@ -52,7 +53,7 @@ static size_t GetSharedMemorySize() {
 }
 
 static void UnlinkSharedMemory() {
-  if (disabled || !__llvm_covmap) {
+  if (__llvm_covmap_disabled || !__llvm_covmap) {
     return;
   }
 
@@ -66,27 +67,27 @@ static void UnlinkSharedMemory() {
 static void MountBitmap() {
   __llvm_covmap_shm_name = getenv("LLVM_COVMAP_SHM_NAME");
   if (!__llvm_covmap_shm_name) {
-    disabled = 1;
+    __llvm_covmap_disabled = 1;
     return;
   }
 
-  sharedMemoryFd = shm_open(__llvm_covmap_shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-  if (sharedMemoryFd == -1) {
+  __llvm_covmap_fd = shm_open(__llvm_covmap_shm_name, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+  if (__llvm_covmap_fd == -1) {
     FatalError("shm_open", errno);
   }
 
   __llvm_covmap_size = GetSharedMemorySize();
-  if (ftruncate(sharedMemoryFd, __llvm_covmap_size) == -1) {
+  if (ftruncate(__llvm_covmap_fd, __llvm_covmap_size) == -1) {
     int errorCode = errno;
-    close(sharedMemoryFd);
+    close(__llvm_covmap_fd);
     shm_unlink(__llvm_covmap_shm_name);
     FatalError("ftruncate64", errorCode);
   }
 
-  void* sharedMemory = mmap(NULL, __llvm_covmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, sharedMemoryFd, 0);
+  void* sharedMemory = mmap(NULL, __llvm_covmap_size, PROT_READ | PROT_WRITE, MAP_SHARED, __llvm_covmap_fd, 0);
   if (sharedMemory == MAP_FAILED) {
     int errorCode = errno;
-    close(sharedMemoryFd);
+    close(__llvm_covmap_fd);
     shm_unlink(__llvm_covmap_shm_name);
     FatalError("mmap", errorCode);
   }
@@ -103,7 +104,7 @@ static inline void SetBitmap(uint64_t functionId) {
 }
 
 void __llvm_covmap_hit_function(uint64_t functionId) {
-  if (disabled) {
+  if (__llvm_covmap_disabled) {
     return;
   }
 
@@ -112,7 +113,7 @@ void __llvm_covmap_hit_function(uint64_t functionId) {
       FatalError("pthread_mutex_lock", errno);
     }
 
-    if (disabled) {
+    if (__llvm_covmap_disabled) {
       if (pthread_mutex_unlock(&mountMutex)) {
         FatalError("pthread_mutex_unlock", errno);
       }
@@ -126,7 +127,7 @@ void __llvm_covmap_hit_function(uint64_t functionId) {
       FatalError("pthread_mutex_unlock", errno);
     }
 
-    if (disabled) {
+    if (__llvm_covmap_disabled) {
       return;
     }
   }
