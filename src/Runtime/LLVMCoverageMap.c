@@ -108,7 +108,8 @@ void __llvm_covmap_hit_function(uint64_t functionId) {
     return;
   }
 
-  if (!__llvm_covmap) {
+  // if (!__llvm_covmap)
+  if (__builtin_expect(__llvm_covmap == NULL, 0)) {
     if (pthread_mutex_lock(&mountMutex)) {
       FatalError("pthread_mutex_lock", errno);
     }

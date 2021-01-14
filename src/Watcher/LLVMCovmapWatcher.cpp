@@ -108,6 +108,10 @@ int main(int argc, char **argv) {
               ->default_value("10"));
 
   auto args = options.parse(argc, argv);
+  if (args.count("help")) {
+    std::cout << options.help() << std::endl;
+    return 0;
+  }
 
   const auto& shmName = args["name"].as<std::string>();
   auto shmSize = args["size"].as<size_t>();
